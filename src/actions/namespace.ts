@@ -93,7 +93,7 @@ export async function createNamespace(
       .exec();
 
     // Store encrypted plain key permanently
-    const encryptedPlainKey = encrypt(plainApiKey);
+    const encryptedPlainKey = await encrypt(plainApiKey);
     await redis.set(`plainkey:${userId}:${namespaceSlug}`, encryptedPlainKey);
 
     // Publish namespace update

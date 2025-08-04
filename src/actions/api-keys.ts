@@ -53,7 +53,7 @@ export async function getApiKeys(): Promise<ApiKey[]> {
       let plainApiKey: string | null = null;
       if (encryptedPlainApiKey) {
         try {
-          plainApiKey = decrypt(encryptedPlainApiKey);
+          plainApiKey = await decrypt(encryptedPlainApiKey);
         } catch (error) {
           console.error("Failed to decrypt API key:", error);
           // If decryption fails, we'll show masked version
@@ -123,7 +123,7 @@ export async function regenerateApiKey(
       .exec();
 
     // Store encrypted plain key permanently
-    const encryptedPlainKey = encrypt(plainApiKey);
+    const encryptedPlainKey = await encrypt(plainApiKey);
     await redis.set(`plainkey:${userId}:${namespace}`, encryptedPlainKey);
 
     // Publish namespace update

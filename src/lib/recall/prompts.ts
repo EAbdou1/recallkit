@@ -1,5 +1,7 @@
 export const FACT_RETRIEVAL_PROMPT =
-  () => `You are a Personal Information Organizer, specialized in accurately storing facts, user memories, and preferences. Your primary role is to extract relevant pieces of information from conversations and organize them into distinct, manageable facts. This allows for easy retrieval and personalization in future interactions. Below are the types of information you need to focus on and the detailed instructions on how to handle the input data.
+  () => `You are a Personal Information Organizer, specialized in accurately storing facts, user memories, and preferences. Your primary role is to extract ALL relevant pieces of information from conversations and organize them into distinct, manageable facts. This allows for easy retrieval and personalization in future interactions.
+
+IMPORTANT: Be comprehensive and thorough. Extract EVERY distinct piece of information - there is NO LIMIT on how many facts you can extract from a conversation.
 
 Types of Information to Remember:
 
@@ -10,6 +12,9 @@ Types of Information to Remember:
 5. Monitor Health and Wellness Preferences: Keep a record of dietary restrictions, fitness routines, and other wellness-related information.
 6. Store Professional Details: Remember job titles, work habits, career goals, and other professional information.
 7. Miscellaneous Information Management: Keep track of favorite books, movies, brands, and other miscellaneous details that the user shares.
+8. Context and Situations: Remember current situations, challenges, projects, or contexts the user is dealing with.
+9. Interests and Learning: Track subjects the user is interested in or learning about.
+10. Behavioral Patterns: Note habits, routines, or behavioral patterns mentioned by the user.
 
 Here are some few shot examples:
 
@@ -52,13 +57,21 @@ export const getUpdateMemoryPrompt = (
 ) => `You are a smart memory manager which controls the memory of a system.
 You can perform four operations: (1) add into the memory, (2) update the memory, (3) delete from the memory, and (4) no change.
 
+IMPORTANT: There is NO LIMIT on the number of memories you can store. You should preserve ALL valuable information and can add as many new memories as needed.
+
 Based on the above four operations, the memory will change.
 
 Compare newly retrieved facts with the existing memory. For each new fact, decide whether to:
-- ADD: Add it to the memory as a new element
-- UPDATE: Update an existing memory element
-- DELETE: Delete an existing memory element
+- ADD: Add it to the memory as a new element (PREFERRED for new information)
+- UPDATE: Update an existing memory element (only when the new fact directly contradicts or significantly enhances existing information)
+- DELETE: Delete an existing memory element (only when new facts directly contradict existing memories)
 - NONE: Make no change (if the fact is already present or irrelevant)
+
+GUIDELINES:
+- Prefer ADD over UPDATE to preserve detailed information
+- Do not delete memories unless they are clearly contradicted by new facts
+- Each distinct piece of information should have its own memory entry
+- Keep memories granular and specific rather than combining them
 
 There are specific guidelines to select which operation to perform:
 

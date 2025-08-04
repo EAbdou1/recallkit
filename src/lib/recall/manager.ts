@@ -1,6 +1,6 @@
 import { inngest } from "../inngest";
 import { FACT_RETRIEVAL_PROMPT, getUpdateMemoryPrompt } from "./prompts";
-import { generateText, embed } from "ai";
+import { generateObject, embed } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { getRedisClient } from "../redis";
 import { z } from "zod";
@@ -12,10 +12,6 @@ import type {
   ProcessMemoryResult,
   MemoryUpdateItem,
 } from "../../types";
-import { google } from "@ai-sdk/google";
-
-// Redis pipeline result type for internal use
-type RedisCommandResult = [Error | null, unknown] | null;
 
 // Inngest step interface
 interface InngestStep {
@@ -80,33 +76,34 @@ async function getExistingMemories(
       return [];
     }
 
-    // Fetch all memories in parallel
+    // Fetch all memories from JSON documents
     const memories: { id: string; text: string }[] = [];
-    const pipeline = redis.multi();
 
     for (const memoryId of memoryIds) {
-      pipeline.hGetAll(`${memoryKey}:${memoryId}`);
-    }
-
-    const results = await pipeline.exec();
-
-    if (results) {
-      for (let i = 0; i < results.length; i++) {
-        const commandResult = results[i] as unknown as RedisCommandResult;
-        if (commandResult && !commandResult[0] && commandResult[1]) {
-          const memoryData = commandResult[1] as Record<string, string>;
-          if (memoryData.text) {
-            memories.push({
-              id: memoryIds[i],
-              text: memoryData.text,
-            });
-          }
+      try {
+        const memoryData = (await redis.jsonGet(`${memoryKey}:${memoryId}`, {
+          path: "$",
+        })) as Array<{ text: string }>;
+        if (memoryData && memoryData[0] && memoryData[0].text) {
+          memories.push({
+            id: memoryId,
+            text: memoryData[0].text,
+          });
         }
+      } catch (error) {
+        console.error(
+          `[${namespace}/${userId}] Failed to retrieve memory ${memoryId}:`,
+          error
+        );
       }
     }
 
     console.log(
-      `[${namespace}/${userId}] Retrieved ${memories.length} existing memories`
+      `[${namespace}/${userId}] Retrieved ${memories.length} existing memories:`,
+      memories.map((m) => ({
+        id: m.id,
+        text: m.text.substring(0, 100) + "...",
+      }))
     );
     return memories;
   } catch (error) {
@@ -127,6 +124,9 @@ async function persistMemoryChanges(
   memoryUpdates: MemoryUpdateItem[]
 ): Promise<MemoryOperationResult[]> {
   const results: MemoryOperationResult[] = [];
+  if (memoryUpdates.length === 0) {
+    return results;
+  }
 
   try {
     const redis = await getRedisClient();
@@ -139,20 +139,20 @@ async function persistMemoryChanges(
       try {
         switch (event) {
           case "ADD": {
-            // Generate embedding for new memory
             const embedding = await generateEmbedding(text);
             const now = new Date().toISOString();
-
-            // Store memory data
-            pipeline.hSet(`${memoryKey}:${id}`, {
+            const memoryDocument = {
               id,
               text,
-              embedding: JSON.stringify(embedding),
+              embedding,
+              namespace,
+              userId,
               createdAt: now,
               updatedAt: now,
-            });
+            };
 
-            // Add to memory IDs set
+            // CORRECTED SYNTAX: Use .json.set for the pipeline
+            pipeline.json.set(`${memoryKey}:${id}`, "$", memoryDocument);
             pipeline.sAdd(`${memoryKey}:ids`, id);
 
             results.push({
@@ -164,7 +164,6 @@ async function persistMemoryChanges(
           }
 
           case "UPDATE": {
-            // Check if memory exists
             const exists = await redis.sIsMember(`${memoryKey}:ids`, id);
             if (!exists) {
               results.push({
@@ -176,15 +175,18 @@ async function persistMemoryChanges(
               continue;
             }
 
-            // Generate new embedding for updated text
             const embedding = await generateEmbedding(text);
-
-            // Update memory data
-            pipeline.hSet(`${memoryKey}:${id}`, {
+            const updatedDocument = {
+              id,
               text,
-              embedding: JSON.stringify(embedding),
+              embedding,
+              namespace,
+              userId,
               updatedAt: new Date().toISOString(),
-            });
+            };
+
+            // CORRECTED SYNTAX: Use .json.set for the pipeline
+            pipeline.json.set(`${memoryKey}:${id}`, "$", updatedDocument);
 
             results.push({
               success: true,
@@ -195,10 +197,7 @@ async function persistMemoryChanges(
           }
 
           case "DELETE": {
-            // Remove from memory IDs set
             pipeline.sRem(`${memoryKey}:ids`, id);
-
-            // Delete memory data
             pipeline.del(`${memoryKey}:${id}`);
 
             results.push({
@@ -231,7 +230,6 @@ async function persistMemoryChanges(
       }
     }
 
-    // Execute all Redis operations
     await pipeline.exec();
 
     console.log(
@@ -243,6 +241,12 @@ async function persistMemoryChanges(
       `[${namespace}/${userId}] Failed to persist memory changes:`,
       error
     );
+    // Propagate a more specific error if the pipeline failed
+    if (error.message.includes("pipeline.json.set")) {
+      throw new Error(
+        "A command in the Redis pipeline failed. Check Redis client compatibility with JSON module."
+      );
+    }
     throw new Error("Failed to persist memory changes to Redis");
   }
 }
@@ -277,28 +281,18 @@ export const processMemory = inngest.createFunction(
 
       const fullPrompt = FACT_RETRIEVAL_PROMPT() + "\n\n" + conversationString;
 
-      const { text } = await generateText({
-        model: google("gemini-2.0-flash"),
+      const { object } = await generateObject({
+        model: openai("gpt-4o-mini"),
+        schema: FactsSchema,
         prompt: fullPrompt,
         temperature: 0.1, // Low temperature for consistent fact extraction
       });
 
-      try {
-        const parsed = FactsSchema.parse(JSON.parse(text));
-        console.log(
-          `[${namespace}/${userId}] Successfully extracted ${parsed.facts.length} facts:`,
-          parsed.facts
-        );
-        return parsed;
-      } catch (error) {
-        console.error(
-          `[${namespace}/${userId}] Failed to parse facts JSON:`,
-          error,
-          "Raw text:",
-          text
-        );
-        throw new Error("Failed to extract facts from conversation");
-      }
+      console.log(
+        `[${namespace}/${userId}] Successfully extracted ${object.facts.length} facts:`,
+        object.facts
+      );
+      return object;
     });
 
     // Early exit if no facts were extracted
@@ -336,28 +330,31 @@ export const processMemory = inngest.createFunction(
           newFactsString
         );
 
-        const { text } = await generateText({
-          model: openai("gpt-4o"),
+        const { object } = await generateObject({
+          model: openai("gpt-4o-mini"),
+          schema: MemoryUpdateSchema,
           prompt: updatePrompt,
           temperature: 0.1, // Low temperature for consistent memory updates
         });
 
-        try {
-          const parsed = MemoryUpdateSchema.parse(JSON.parse(text));
-          console.log(
-            `[${namespace}/${userId}] Memory update decision with ${parsed.memory.length} operations:`,
-            parsed.memory.map((m) => `${m.event}:${m.id}`)
-          );
-          return parsed;
-        } catch (error) {
-          console.error(
-            `[${namespace}/${userId}] Failed to parse memory update JSON:`,
-            error,
-            "Raw text:",
-            text
-          );
-          throw new Error("Failed to generate memory update decision");
-        }
+        console.log(
+          `[${namespace}/${userId}] Memory update decision with ${object.memory.length} operations:`,
+          object.memory.map(
+            (m) => `${m.event}:${m.id}:${m.text?.substring(0, 50)}...`
+          )
+        );
+
+        // Additional debugging to see what operations we're performing
+        const operationCounts = object.memory.reduce((acc, m) => {
+          acc[m.event] = (acc[m.event] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        console.log(
+          `[${namespace}/${userId}] Operation breakdown:`,
+          operationCounts
+        );
+        return object;
       }
     );
 
