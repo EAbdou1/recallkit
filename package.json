@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/google": "^2.0.1",
     "@ai-sdk/openai": "^2.0.0",
     "@clerk/nextjs": "^6.28.1",
     "@hookform/resolvers": "^5.2.1",
@@ -44,6 +45,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
+    "inngest": "^3.40.1",
     "input-otp": "^1.4.2",
     "ioredis": "^5.7.0",
     "lucide-react": "^0.536.0",

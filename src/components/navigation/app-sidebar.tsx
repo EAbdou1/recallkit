@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { BookOpen, Bot, SquareTerminal } from "lucide-react";
+import { BookOpen, Home, MemoryStick, Terminal } from "lucide-react";
 
 import { NavMain } from "@/components/navigation/nav-main";
 import { NavUser } from "@/components/navigation/nav-user";
@@ -22,28 +22,38 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         title: "Dashboard",
         url: "/dashboard",
-        icon: SquareTerminal,
-        isActive: true,
+        icon: Home,
+        activeUrl: "/dashboard",
       },
       {
-        title: "API Keys",
-        url: "/dashboard/api-keys",
-        icon: Bot,
+        title: "Memories",
+        url: "/dashboard/memories",
+        icon: MemoryStick,
+        activeUrl: "/dashboard/memories",
       },
+
       {
         title: "Demo",
         url: "/dashboard/demo",
         icon: BookOpen,
+        activeUrl: "/dashboard/demo",
       },
       {
         title: "Documentation",
         url: "/dashboard/documentation",
         icon: BookOpen,
+        activeUrl: "/dashboard/documentation",
+      },
+      {
+        title: "API Keys",
+        url: "/dashboard/api-keys",
+        icon: Terminal,
+        activeUrl: "/dashboard/api-keys",
       },
     ],
   };
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar variant="sidebar" collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
