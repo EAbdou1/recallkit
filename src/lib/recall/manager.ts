@@ -81,7 +81,7 @@ async function getExistingMemories(
 
     for (const memoryId of memoryIds) {
       try {
-        const memoryData = (await redis.jsonGet(`${memoryKey}:${memoryId}`, {
+        const memoryData = (await redis.json.get(`${memoryKey}:${memoryId}`, {
           path: "$",
         })) as Array<{ text: string }>;
         if (memoryData && memoryData[0] && memoryData[0].text) {
@@ -242,7 +242,7 @@ async function persistMemoryChanges(
       error
     );
     // Propagate a more specific error if the pipeline failed
-    if (error.message.includes("pipeline.json.set")) {
+    if (error instanceof Error && error.message.includes("pipeline.json.set")) {
       throw new Error(
         "A command in the Redis pipeline failed. Check Redis client compatibility with JSON module."
       );
