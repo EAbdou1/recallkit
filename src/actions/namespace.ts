@@ -1,6 +1,6 @@
 "use server";
 
-import { getRedisClient } from "@/lib/redis";
+import { client } from "@/lib/redis";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
@@ -15,11 +15,10 @@ import { encrypt } from "@/lib/encryption";
 // Helper function to publish namespace updates
 export async function publishNamespaceUpdate(userId: string, action: string) {
   try {
-    const redis = await getRedisClient();
     const namespaces = await getNamespaces();
     const hasNamespace = namespaces.length > 0;
 
-    await redis.publish(
+    await client.publish(
       `namespace:${userId}`,
       JSON.stringify({
         hasNamespace,
@@ -58,10 +57,9 @@ export async function createNamespace(
 
   const { name } = validatedFields.data;
   const namespaceSlug = name.toLowerCase().replace(/\s+/g, "-");
-  const redis = await getRedisClient();
 
   try {
-    const userDataString = await redis.get(`user:${userId}`);
+    const userDataString = await client.get(`user:${userId}`);
     const userData: UserData = userDataString
       ? JSON.parse(userDataString)
       : { namespaces: [] };
@@ -86,7 +84,7 @@ export async function createNamespace(
       userData.currentNamespace = namespaceSlug;
     }
 
-    await redis
+    await client
       .multi()
       .set(`user:${userId}`, JSON.stringify(userData))
       .set(`apikey:${hashedApiKey}`, userId)
@@ -94,13 +92,12 @@ export async function createNamespace(
 
     // Store encrypted plain key permanently
     const encryptedPlainKey = await encrypt(plainApiKey);
-    await redis.set(`plainkey:${userId}:${namespaceSlug}`, encryptedPlainKey);
+    await client.set(`plainkey:${userId}:${namespaceSlug}`, encryptedPlainKey);
 
     // Publish namespace update
     await publishNamespaceUpdate(userId, "created");
 
     revalidatePath("/dashboard");
-
     return {
       newApiKey: plainApiKey,
       namespace: namespaceSlug,
@@ -121,8 +118,7 @@ export async function getNamespaces(): Promise<Namespace[]> {
   }
 
   try {
-    const redis = await getRedisClient();
-    const userDataString = await redis.get(`user:${userId}`);
+    const userDataString = await client.get(`user:${userId}`);
     const userData: UserData = userDataString
       ? JSON.parse(userDataString)
       : { namespaces: [] };
@@ -140,8 +136,7 @@ export async function getCurrentNamespace(): Promise<string | null> {
   }
 
   try {
-    const redis = await getRedisClient();
-    const userDataString = await redis.get(`user:${userId}`);
+    const userDataString = await client.get(`user:${userId}`);
     const userData: UserData = userDataString
       ? JSON.parse(userDataString)
       : { namespaces: [] };
@@ -155,7 +150,6 @@ export async function getCurrentNamespace(): Promise<string | null> {
     if (userData.namespaces.length > 0) {
       return userData.namespaces[0].name;
     }
-
     return null;
   } catch (error) {
     console.error("Failed to fetch current namespace:", error);
@@ -172,8 +166,7 @@ export async function setCurrentNamespace(
   }
 
   try {
-    const redis = await getRedisClient();
-    const userDataString = await redis.get(`user:${userId}`);
+    const userDataString = await client.get(`user:${userId}`);
     const userData: UserData = userDataString
       ? JSON.parse(userDataString)
       : { namespaces: [] };
@@ -187,13 +180,12 @@ export async function setCurrentNamespace(
     }
 
     userData.currentNamespace = namespaceName;
-    await redis.set(`user:${userId}`, JSON.stringify(userData));
+    await client.set(`user:${userId}`, JSON.stringify(userData));
 
     // Publish namespace update
     await publishNamespaceUpdate(userId, "updated");
 
     revalidatePath("/dashboard");
-
     return true;
   } catch (error) {
     console.error("Failed to set current namespace:", error);
@@ -208,11 +200,11 @@ export async function getUserData(): Promise<UserData> {
   }
 
   try {
-    const redis = await getRedisClient();
-    const userDataString = await redis.get(`user:${userId}`);
+    const userDataString = await client.get(`user:${userId}`);
     const userData: UserData = userDataString
       ? JSON.parse(userDataString)
       : { namespaces: [] };
+
     return userData;
   } catch (error) {
     console.error("Failed to fetch user data:", error);

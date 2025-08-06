@@ -1,6 +1,6 @@
 "use client";
 
-import { FC } from "react";
+import { FC, useTransition } from "react";
 import { Namespace } from "@/types/namespace";
 import {
   Popover,
@@ -8,8 +8,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Folder, Plus } from "lucide-react";
+import { ChevronDown, Folder } from "lucide-react";
 import CreateNamespace from "./CreateNamespace";
+import { switchNamespace } from "@/actions/setNamespace";
 
 interface NamespaceMenuProps {
   data: Namespace[];
@@ -17,6 +18,14 @@ interface NamespaceMenuProps {
 }
 
 const NamespaceMenu: FC<NamespaceMenuProps> = ({ data, currentNamespace }) => {
+  const [isPending, startTransition] = useTransition();
+
+  const handleSwitch = (namespaceName: string) => {
+    startTransition(() => {
+      switchNamespace(namespaceName);
+    });
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -41,29 +50,35 @@ const NamespaceMenu: FC<NamespaceMenuProps> = ({ data, currentNamespace }) => {
               data.map((namespace) => {
                 const isCurrent = currentNamespace === namespace.name;
                 return (
-                  <div
+                  <form
                     key={namespace.name}
-                    className={`flex items-center justify-between p-2 rounded-md hover:bg-accent transition-colors ${
-                      isCurrent ? "bg-primary/10  border border-primary" : ""
-                    }`}
+                    action={() => handleSwitch(namespace.name)}
                   >
-                    <div
-                      className={`flex items-center gap-2 ${
-                        isCurrent
-                          ? "text-primary font-semibold"
-                          : "text-muted-foreground"
+                    <button
+                      type="submit"
+                      className={`flex items-center justify-between w-full p-2 rounded-md hover:bg-accent transition-colors ${
+                        isCurrent ? "bg-primary/10  border border-primary" : ""
                       }`}
+                      disabled={isCurrent || isPending}
                     >
-                      <Folder
-                        className={`h-4 w-4 ${
-                          isCurrent ? "text-primary" : "text-muted-foreground"
+                      <div
+                        className={`flex items-center gap-2 ${
+                          isCurrent
+                            ? "text-primary font-semibold"
+                            : "text-muted-foreground"
                         }`}
-                      />
-                      <span className="text-sm font-medium">
-                        {namespace.name}
-                      </span>
-                    </div>
-                  </div>
+                      >
+                        <Folder
+                          className={`h-4 w-4 ${
+                            isCurrent ? "text-primary" : "text-muted-foreground"
+                          }`}
+                        />
+                        <span className="text-sm font-medium">
+                          {namespace.name}
+                        </span>
+                      </div>
+                    </button>
+                  </form>
                 );
               })
             )}

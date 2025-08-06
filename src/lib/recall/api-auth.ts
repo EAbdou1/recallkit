@@ -1,4 +1,4 @@
-import { getRedisClient } from "@/lib/redis";
+import { client } from "@/lib/redis";
 import type { UserData } from "@/types";
 
 // The successful result contains both namespace and developerUserId
@@ -18,15 +18,14 @@ export async function handleApiAuth(
   apiKey: string
 ): Promise<AuthResult | AuthFailure> {
   try {
-    const redis = await getRedisClient();
     const hashedApiKey = btoa(apiKey);
-    const userId = await redis.get(`apikey:${hashedApiKey}`);
+    const userId = await client.get(`apikey:${hashedApiKey}`);
 
     if (!userId) {
       return { success: false, error: "Invalid API Key.", status: 401 };
     }
 
-    const userDataString = await redis.get(`user:${userId}`);
+    const userDataString = await client.get(`user:${userId}`);
     if (!userDataString) {
       console.error(
         `Inconsistency: API key found for user ${userId}, but user data is missing.`

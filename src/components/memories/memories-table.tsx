@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Memory } from "@/types/recall";
+import { Memory, getMemoriesByUser } from "@/data/memories";
 
 interface MemoriesTableProps {
   userId: string | null;
@@ -27,23 +27,20 @@ export function MemoriesTable({ userId, namespace }: MemoriesTableProps) {
       return;
     }
 
-    const fetchMemories = async () => {
+    const fetchUserMemories = async () => {
       setLoading(true);
       try {
-        const response = await fetch(
-          `/api/memories/${userId}?namespace=${namespace}`
-        );
-        const data = await response.json();
-        setMemories(data.memories || []);
+        const userMemories = await getMemoriesByUser(namespace, userId);
+        setMemories(userMemories);
       } catch (error) {
-        console.error("Failed to fetch memories:", error);
+        console.error("Failed to fetch memories for user:", error);
         setMemories([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMemories();
+    fetchUserMemories();
   }, [userId, namespace]);
 
   if (loading) {

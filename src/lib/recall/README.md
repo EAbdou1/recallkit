@@ -1,151 +1,148 @@
 # RecallKit Memory Management System
 
-This module provides intelligent memory management for the RecallKit dashboard, allowing the system to extract, store, and manage user memories from conversations.
+This module provides intelligent memory management capabilities for storing, retrieving, and managing user memories from conversations.
 
 ## Architecture Overview
 
-The memory management system consists of three main components:
+The system has been refactored into focused, single-responsibility modules for better maintainability and understandability:
 
-### 1. **manager.ts** - Core Processing Logic
+### Core Modules
 
-The main orchestrator that handles the complete memory processing workflow:
+#### `memory-processor.ts`
 
-- **Fact Extraction**: Uses LLM to extract meaningful facts from conversations
-- **Memory Reconciliation**: Compares new facts with existing memories to determine required operations
-- **Persistence**: Stores memory changes to Redis with semantic embeddings
+- **Purpose**: Main orchestrator for the memory processing workflow
+- **Key Function**: `processMemory` - The Inngest function that coordinates the entire process
+- **Responsibilities**:
+  - Input validation
+  - Step coordination
+  - Result assembly
 
-### 2. **prompts.ts** - LLM Prompts
+#### `fact-extraction.ts`
 
-Contains specialized prompts for:
+- **Purpose**: Extracts facts from conversations using AI
+- **Key Function**: `extractFactsFromConversation`
+- **Responsibilities**:
+  - Message processing
+  - AI prompt generation
+  - Fact extraction
 
-- Extracting facts from conversations
-- Determining memory update operations (ADD, UPDATE, DELETE, NONE)
+#### `memory-reconciliation.ts`
 
-### 3. **types.ts** - Type Definitions
+- **Purpose**: Reconciles new facts with existing memories
+- **Key Function**: `reconcileMemoriesWithFacts`
+- **Responsibilities**:
+  - Memory retrieval
+  - AI-based reconciliation
+  - Update decision generation
 
-Provides comprehensive TypeScript types for:
+#### `memory-storage.ts`
 
-- Message structures
-- Memory operations
-- Processing results
-- Event interfaces
+- **Purpose**: Handles persistence operations in Redis
+- **Key Function**: `persistMemoryOperations`
+- **Responsibilities**:
+  - CRUD operations (ADD, UPDATE, DELETE)
+  - Redis pipeline management
+  - Error handling
 
-## Key Features
+### Utility Modules
 
-### ✨ **Intelligent Memory Processing**
+#### `embedding-service.ts`
 
-- Extracts relevant facts from multi-message conversations
-- Reconciles new information with existing memories
-- Supports four operations: ADD, UPDATE, DELETE, NONE
+- **Purpose**: AI embedding generation
+- **Key Function**: `createTextEmbedding`
+- **Responsibilities**:
+  - OpenAI embedding API calls
+  - Error handling for embedding failures
 
-### 🔍 **Semantic Search Ready**
+#### `redis-utils.ts`
 
-- Generates embeddings for all memories using OpenAI
-- Stores embeddings alongside memory text for future semantic search
+- **Purpose**: Redis utility functions
+- **Key Functions**:
+  - `createMemoryKey` - Generates Redis keys
+  - `fetchUserMemories` - Retrieves user memories
+- **Responsibilities**:
+  - Redis key management
+  - Memory retrieval logic
 
-### 🚀 **Scalable Architecture**
+#### `schemas.ts`
 
-- Uses Redis for high-performance storage
-- Implements efficient batch operations
-- Structured for horizontal scaling
+- **Purpose**: Zod validation schemas
+- **Key Schemas**:
+  - `FactsSchema` - Validates extracted facts
+  - `MemoryUpdateSchema` - Validates memory updates
+- **Responsibilities**:
+  - Runtime validation
+  - Type safety
 
-### 🛡️ **Type Safety**
+#### `result-processor.ts`
 
-- Full TypeScript coverage
-- Runtime validation with Zod schemas
-- Comprehensive error handling
+- **Purpose**: Result processing and summary generation
+- **Key Functions**:
+  - `processPersistenceResults` - Analyzes operation results
+  - `createProcessingResult` - Creates final result objects
+  - `createNoFactsResult` - Handles early exits
+- **Responsibilities**:
+  - Result aggregation
+  - Summary statistics
+  - Error reporting
 
-### 📊 **Observability**
+## Usage
 
-- Detailed logging for each processing step
-- Operation metrics and success/failure tracking
-- Structured result reporting
-
-## Processing Workflow
-
-```mermaid
-graph TB
-    A[Conversation Messages] --> B[Extract Facts]
-    B --> C{Facts Found?}
-    C -->|No| D[Return: No Facts]
-    C -->|Yes| E[Retrieve Existing Memories]
-    E --> F[LLM Memory Reconciliation]
-    F --> G[Generate Update Operations]
-    G --> H[Persist to Redis]
-    H --> I[Return Results]
-```
-
-## Usage Example
+### Basic Usage
 
 ```typescript
-import { processMemory } from "./manager";
+import { processMemory } from "./memory-processor";
 
-// Trigger memory processing via Inngest
-await inngest.send({
-  name: "memory/process",
-  data: {
-    messages: [
-      { role: "user", content: "Hi, my name is John and I love pizza." },
-      {
-        role: "assistant",
-        content: "Nice to meet you John! What kind of pizza do you prefer?",
-      },
-      { role: "user", content: "I really enjoy pepperoni and mushroom pizza." },
-    ],
-    namespace: "user-workspace",
-    userId: "user123",
-  },
-});
+// The processMemory function is automatically triggered by Inngest events
+// with the event type "memory/process"
 ```
 
-## Redis Data Structure
+### Individual Services
 
-The system uses an efficient Redis structure for storing memories:
+```typescript
+import {
+  extractFactsFromConversation,
+  reconcileMemoriesWithFacts,
+  persistMemoryOperations,
+} from "./index";
+
+// Use individual services as needed
+const facts = await extractFactsFromConversation(messages, namespace, userId);
+const updates = await reconcileMemoriesWithFacts(facts, namespace, userId);
+const results = await persistMemoryOperations(
+  namespace,
+  userId,
+  updates.memory
+);
+```
+
+## Benefits of the New Structure
+
+1. **Single Responsibility**: Each module has a clear, focused purpose
+2. **Testability**: Individual functions can be easily unit tested
+3. **Maintainability**: Changes to one aspect don't affect others
+4. **Readability**: Smaller files are easier to understand
+5. **Reusability**: Functions can be used independently
+6. **Error Isolation**: Issues are contained within specific modules
+
+## Migration Notes
+
+The original `manager.ts` file has been replaced with a simple re-export file for backward compatibility. All existing imports should continue to work without changes.
+
+## File Structure
 
 ```
-memories:{namespace}:{userId}:ids → Set of memory IDs
-memories:{namespace}:{userId}:{memoryId} → Hash containing:
-  - id: Memory identifier
-  - text: Memory content
-  - embedding: JSON-encoded vector embedding
-  - createdAt: ISO timestamp
-  - updatedAt: ISO timestamp
+src/lib/recall/
+├── index.ts                 # Main exports
+├── manager.ts               # Backward compatibility re-exports
+├── memory-processor.ts      # Main orchestrator
+├── fact-extraction.ts       # Fact extraction service
+├── memory-reconciliation.ts # Memory reconciliation service
+├── memory-storage.ts        # Redis persistence service
+├── embedding-service.ts     # AI embedding service
+├── redis-utils.ts          # Redis utilities
+├── schemas.ts              # Validation schemas
+├── result-processor.ts     # Result processing utilities
+├── prompts.ts              # AI prompts (existing)
+└── README.md               # This documentation
 ```
-
-## Configuration
-
-The system uses the following environment variables:
-
-- `REDIS_HOST` - Redis server host
-- `REDIS_PORT` - Redis server port (default: 6379)
-- `REDIS_PASSWORD` - Redis authentication password
-- `REDIS_USERNAME` - Redis username (default: "default")
-- `INNGEST_EVENT_KEY` - Inngest event key for processing
-- `OPENAI_API_KEY` - OpenAI API key for LLM and embeddings
-
-## Error Handling
-
-The system implements comprehensive error handling:
-
-- **Validation Errors**: Input validation for messages, namespace, and userId
-- **LLM Errors**: Retry logic for fact extraction and memory reconciliation
-- **Redis Errors**: Connection management and operation failure handling
-- **Embedding Errors**: Fallback strategies for embedding generation failures
-
-## Performance Optimizations
-
-- **Batch Operations**: Uses Redis pipelines for efficient multi-operation execution
-- **Parallel Processing**: Concurrent embedding generation and memory retrieval
-- **Connection Pooling**: Reuses Redis connections across operations
-- **Early Termination**: Exits early when no facts are found
-
-## Monitoring & Debugging
-
-The system provides detailed logging at each step:
-
-- Fact extraction results
-- Memory reconciliation decisions
-- Persistence operation outcomes
-- Performance metrics and timing
-
-All logs are prefixed with `[namespace/userId]` for easy filtering and debugging.

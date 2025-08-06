@@ -69,11 +69,15 @@ export async function POST(req: NextRequest) {
       if (recallResponse.ok) {
         const recallData = await recallResponse.json();
         memories = recallData.memories || "";
+
+        // Count the actual number of memories by counting the "- " occurrences
+        const memoryCount = memories.split("\n- ").length - 1; // Subtract 1 because first line is "From recall memories:"
+
         console.log(
           "Successfully retrieved memories for user:",
           sanitizedUserId,
-          "Memories length:",
-          memories.length,
+          "Number of memories:",
+          memoryCount,
           "Memories content:",
           memories
         );
@@ -112,8 +116,8 @@ export async function POST(req: NextRequest) {
       console.log(
         "No memories to add. Last message role:",
         lastMessage?.role,
-        "Memories length:",
-        memories.length,
+        "Number of memories:",
+        memories.split("\n- ").length - 1,
         "Memories trim length:",
         memories.trim().length
       );

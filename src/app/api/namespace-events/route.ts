@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getRedisClient } from "@/lib/redis";
 import { getNamespaces } from "@/actions/namespace";
+import { client } from "@/lib/redis";
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,10 +49,8 @@ export async function GET(request: NextRequest) {
         let redisSubscriber: any = null;
 
         try {
-          const redis = await getRedisClient();
-
           // Create a separate connection for pub/sub
-          redisSubscriber = redis.duplicate();
+          redisSubscriber = client.duplicate();
           await redisSubscriber.connect();
 
           // Subscribe to namespace changes for this user
@@ -87,6 +85,7 @@ export async function GET(request: NextRequest) {
             }
             controller.close();
           });
+          await redisSubscriber.disconnect();
         } catch (error) {
           console.error("Error setting up Redis Pub/Sub:", error);
           sendEvent({

@@ -1,6 +1,6 @@
 "use server";
 
-import { getRedisClient } from "@/lib/redis";
+import { client } from "@/lib/redis";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
@@ -10,12 +10,11 @@ import { encrypt, decrypt } from "@/lib/encryption";
 // Helper function to publish namespace updates
 export async function publishNamespaceUpdate(userId: string, action: string) {
   try {
-    const redis = await getRedisClient();
     const { getNamespaces } = await import("@/actions/namespace");
     const namespaces = await getNamespaces();
     const hasNamespace = namespaces.length > 0;
 
-    await redis.publish(
+    await client.publish(
       `namespace:${userId}`,
       JSON.stringify({
         hasNamespace,
@@ -36,8 +35,7 @@ export async function getApiKeys(): Promise<ApiKey[]> {
   }
 
   try {
-    const redis = await getRedisClient();
-    const userDataString = await redis.get(`user:${userId}`);
+    const userDataString = await client.get(`user:${userId}`);
     const userData: UserData = userDataString
       ? JSON.parse(userDataString)
       : { namespaces: [] };
@@ -48,7 +46,7 @@ export async function getApiKeys(): Promise<ApiKey[]> {
     for (const namespace of userData.namespaces) {
       // Try to get the encrypted plain API key from storage
       const plainKeyKey = `plainkey:${userId}:${namespace.name}`;
-      const encryptedPlainApiKey = await redis.get(plainKeyKey);
+      const encryptedPlainApiKey = await client.get(plainKeyKey);
 
       let plainApiKey: string | null = null;
       if (encryptedPlainApiKey) {
@@ -90,8 +88,7 @@ export async function regenerateApiKey(
   }
 
   try {
-    const redis = await getRedisClient();
-    const userDataString = await redis.get(`user:${userId}`);
+    const userDataString = await client.get(`user:${userId}`);
     const userData: UserData = userDataString
       ? JSON.parse(userDataString)
       : { namespaces: [] };
@@ -106,7 +103,7 @@ export async function regenerateApiKey(
 
     // Remove old API key mapping
     const oldHashedKey = userData.namespaces[namespaceIndex].apiKey;
-    await redis.del(`apikey:${oldHashedKey}`);
+    await client.del(`apikey:${oldHashedKey}`);
 
     // Generate new API key
     const plainApiKey = `key_${nanoid(32)}`;
@@ -116,7 +113,7 @@ export async function regenerateApiKey(
     userData.namespaces[namespaceIndex].apiKey = hashedApiKey;
 
     // Store updated user data and new API key mapping
-    await redis
+    await client
       .multi()
       .set(`user:${userId}`, JSON.stringify(userData))
       .set(`apikey:${hashedApiKey}`, userId)
@@ -124,7 +121,7 @@ export async function regenerateApiKey(
 
     // Store encrypted plain key permanently
     const encryptedPlainKey = await encrypt(plainApiKey);
-    await redis.set(`plainkey:${userId}:${namespace}`, encryptedPlainKey);
+    await client.set(`plainkey:${userId}:${namespace}`, encryptedPlainKey);
 
     // Publish namespace update
     await publishNamespaceUpdate(userId, "updated");
@@ -149,8 +146,7 @@ export async function deleteApiKey(
     // Extract namespace name from apiKeyId (format: key_${namespace})
     const namespace = apiKeyId.replace("key_", "");
 
-    const redis = await getRedisClient();
-    const userDataString = await redis.get(`user:${userId}`);
+    const userDataString = await client.get(`user:${userId}`);
     const userData: UserData = userDataString
       ? JSON.parse(userDataString)
       : { namespaces: [] };
@@ -165,10 +161,10 @@ export async function deleteApiKey(
 
     // Remove API key mapping from Redis
     const hashedKey = userData.namespaces[namespaceIndex].apiKey;
-    await redis.del(`apikey:${hashedKey}`);
+    await client.del(`apikey:${hashedKey}`);
 
     // Remove encrypted plain key from Redis
-    await redis.del(`plainkey:${userId}:${namespace}`);
+    await client.del(`plainkey:${userId}:${namespace}`);
 
     // Remove namespace from user data
     userData.namespaces.splice(namespaceIndex, 1);
@@ -182,7 +178,7 @@ export async function deleteApiKey(
     }
 
     // Update user data
-    await redis.set(`user:${userId}`, JSON.stringify(userData));
+    await client.set(`user:${userId}`, JSON.stringify(userData));
 
     // Publish namespace update
     await publishNamespaceUpdate(userId, "deleted");

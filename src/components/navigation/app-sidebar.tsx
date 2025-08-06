@@ -56,19 +56,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar variant="sidebar" collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/dashboard">
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">RecallKit</span>
-                  <span className="truncate text-xs">Powered by Redis</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          <Link href="/dashboard" className="px-2 pt-2">
+            <span className="truncate font-bold  text-lg text-foreground">
+              RecallKit
+            </span>
+          </Link>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="mt-4">
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
